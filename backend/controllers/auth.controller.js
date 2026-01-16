@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/user.models.js'
+import generateAndSetCookie from '../utils/generateandsetcookie.js';
 
 
 export const signupcontroller = async (req, res) => {
@@ -65,6 +66,7 @@ export const signupcontroller = async (req, res) => {
       password: hashedPassword,
       role: finalRole,
     });
+    await generateAndSetCookie(newuser._id,res)
 
     res.status(201).json({
       success: true,
