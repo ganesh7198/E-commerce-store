@@ -1,8 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/user.models.js'
-import User from "../models/User.js";
-import bcrypt from "bcryptjs";
+
 
 export const signupcontroller = async (req, res) => {
   try {

@@ -1,5 +1,6 @@
 import express from 'express';
 import { logincontroller, signupcontroller } from '../controllers/auth.controller.js';
+import rateLimit from 'express-rate-limit';
 
 const router=express.Router();
 // RATE LIMITER -------------
