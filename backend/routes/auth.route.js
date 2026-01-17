@@ -1,5 +1,5 @@
 import express from 'express';
-import { logincontroller, signupcontroller } from '../controllers/auth.controller.js';
+import { logincontroller, logoutcontroller, signupcontroller } from '../controllers/auth.controller.js';
 import rateLimit from 'express-rate-limit';
 
 const router=express.Router();
@@ -19,6 +19,7 @@ const signupLimiter = rateLimit({
 
 router.post('/signup',signupLimiter,signupcontroller);
 router.post('/login',logincontroller);
+router.post('/logout',logoutcontroller)
 
 
 

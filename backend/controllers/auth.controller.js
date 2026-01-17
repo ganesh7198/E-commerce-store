@@ -21,11 +21,13 @@ export const signupcontroller = async (req, res) => {
         .json({ success: false, message: "Username should be at least 6 characters" });
     }
 
-    if (password.length < 8) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Password should be at least 8 characters" });
-    }
+ if (password.length < 8 || password.length > 16) {
+  return res.status(400).json({
+    success: false,
+    message: "Password should be between 8 to 16 characters",
+  });
+}
+
 
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -85,15 +87,88 @@ export const signupcontroller = async (req, res) => {
 };
 
 
-export const logincontroller=(req,res)=>{
-   try{
-	const {email,password}=req.body;
-	if(!email || !password){
-		return res.status(400).json({success: false, message:"intrnal server error"})
-	}
+export const logincontroller = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-   }catch(error){
-       console.log('erro0r  in the login controller ', error.message)
-	   res.status(500).json({sucess: false, message:"internal server error "});
-   }
-}
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email",
+      });
+    }
+
+    // Find user
+    const existeduser = await User.findOne({ email });
+    if (!existeduser) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Compare password
+    const validpassword = await bcrypt.compare(
+      password,
+      existeduser.password
+    );
+
+    if (!validpassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Set JWT cookie
+    await generateAndSetCookie(existeduser._id, res);
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user: {
+        id: existeduser._id,
+        username: existeduser.username,
+        email: existeduser.email,
+        role: existeduser.role,
+      },
+    });
+  } catch (error) {
+    console.log("Error in login controller:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+export const logoutcontroller = async (req, res) => {
+  try {
+    res.clearCookie("jwt-ecommerce-token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  } catch (error) {
+    console.log("Error in logout controller:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
