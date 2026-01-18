@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import authroute from './routes/auth.route.js';
 import connectDB from './utils/db.js';
 import createadmin from './utils/createadmin.js';
+import cookieParser from 'cookie-parser';
 
 
 
@@ -10,6 +11,7 @@ const app=express();
 dotenv.config();
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use('/api/v1/auth',authroute)
 

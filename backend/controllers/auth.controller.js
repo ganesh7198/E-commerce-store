@@ -3,6 +3,7 @@ import User from "../models/user.models.js";
 import generateTokens from "../utils/generateandsetcookie.js";
 import { redis } from "../utils/redis.js";
 import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
 dotenv.config()
 
 /* -------------------- HELPERS -------------------- */
@@ -186,16 +187,31 @@ export const logincontroller = async (req, res) => {
 
 /* -------------------- LOGOUT -------------------- */
 
+
 export const logoutcontroller = async (req, res) => {
   try {
-    const userId = req.user?.id; // from auth middleware
+    const refreshToken = req.cookies.refresh_token;
 
-    if (userId) {
-      await redis.del(`refresh_token:${userId}`);
+    if (refreshToken) {
+      const decoded = jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+      );
+
+      await redis.del(`refresh_token:${decoded.id}`);
     }
 
-    res.clearCookie("access_token");
-    res.clearCookie("refresh_token");
+    res.clearCookie("access_token", {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    res.clearCookie("refresh_token", {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    });
 
     res.status(200).json({
       success: true,
