@@ -5,8 +5,12 @@ import connectDB from './utils/db.js';
 import createadmin from './utils/createadmin.js';
 
 
+
 const app=express();
 dotenv.config();
+app.use(express.json()); 
+app.use(express.urlencoded({ extended: true }));
+
 app.use('/api/v1/auth',authroute)
 
 

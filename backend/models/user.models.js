@@ -5,7 +5,6 @@ const userSchema = new mongoose.Schema(
     username: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
 	  minlength: 6
     },
@@ -35,6 +34,16 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true, // allows multiple null values
     },
+    cartiteams:[{
+      quantity:{
+        type:Number,
+        default:1
+      },
+      product:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Product"
+      }
+    }]
   },
   { timestamps: true }
 );

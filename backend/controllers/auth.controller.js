@@ -2,11 +2,22 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/user.models.js'
 import generateAndSetCookie from '../utils/generateandsetcookie.js';
+import { redis } from '../utils/redis.js';
 
-
+const storerefereshtoken = async(userid,refreshtoken)=>{
+   await redis.set(`refresh_token:${userid}`,refreshtoken, "EX",7*24*60*60)
+}
+const setcookie= async (res,accesstoken,refreshtoken)=>{
+   res.cookie("jwt-ecommerce-token", accesstoken, {
+    httpOnly: true,                           // cannot be accessed by JS
+    secure: process.env.NODE_ENV === "production", // only over HTTPS
+    sameSite: "strict",                        // CSRF protection
+    maxAge: 24 * 60 * 60 * 1000,              // 1 day in milliseconds
+  });
+}
 export const signupcontroller = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body; 
+    const { username , email, password, role } = req.body; 
 
     // ---------------- VALIDATION ----------------
     if (!username || !email || !password) {
@@ -68,7 +79,9 @@ export const signupcontroller = async (req, res) => {
       password: hashedPassword,
       role: finalRole,
     });
-    await generateAndSetCookie(newuser._id,res)
+    const {accesstoken,refreshtoken}=await generateAndSetCookie(newuser._id);
+    await storerefereshtoken(newuser._id,refreshtoken)
+    await setcookie(accesstoken,refreshtoken,res);
 
     res.status(201).json({
       success: true,
