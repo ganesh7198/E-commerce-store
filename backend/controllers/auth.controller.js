@@ -187,7 +187,6 @@ export const logincontroller = async (req, res) => {
 
 /* -------------------- LOGOUT -------------------- */
 
-
 export const logoutcontroller = async (req, res) => {
   try {
     const refreshToken = req.cookies.refresh_token;
@@ -219,6 +218,105 @@ export const logoutcontroller = async (req, res) => {
     });
   } catch (error) {
     console.error("Logout error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+export const refreshtokencontroller = async (req, res) => {
+  try {
+    // 1️ Read refresh token from cookies
+    const refreshToken = req.cookies.refresh_token;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "No refresh token provided",
+      });
+    }
+
+    // 2️ Verify refresh token
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    // 3️ Get stored token from Redis
+    const storedToken = await redis.get(
+      `refresh_token:${decoded.id}`
+    );
+
+    // 4️ Compare tokens
+    if (!storedToken || storedToken !== refreshToken) {
+      return res.status(403).json({
+        message: "Invalid refresh token",
+      });
+    }
+
+    // 5️ Generate new access token
+    const accessToken = jwt.sign(
+      { id: decoded.id },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    // 6️ Set new access token cookie
+    res.cookie("access_token", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    // 7️⃣ Send response
+    res.status(200).json({
+      success: true,
+      message: "Access token refreshed",
+    });
+  } catch (error) {
+    console.error("Error in refresh token controller:", error.message);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
+export const userprofilecontroller = async (req, res) => {
+  try {
+    // 1️⃣ Get access token from cookies
+    const accessToken = req.cookies.access_token;
+
+    if (!accessToken) {
+      return res.status(401).json({
+        message: "No access token found",
+      });
+    }
+
+    // 2️⃣ Verify access token
+    const decoded = jwt.verify(
+      accessToken,
+      process.env.ACCESS_TOKEN_SECRET
+    );
+
+    // 3️⃣ Fetch user from database
+    const user = await User.findById(decoded.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // 4️⃣ Send user profile
+    res.status(200).json({
+      success: true,
+      message: "User profile fetched successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.log("Error in user profile controller:", error.message);
     res.status(500).json({
       success: false,
       message: "Internal server error",
