@@ -1,20 +1,21 @@
 import jwt from "jsonwebtoken";
+import dotenv from 'dotenv'
+dotenv.config()
 
-const generateAndSetCookie = async (userid) => {
-  // Generate JWT token
-  const accesstoken = jwt.sign(
-    { id: userid },             // payload
-    process.env.JWT_SECRET,     // secret
-    { expiresIn: "1d" }        // token expires in 1 day
+const generateTokens = (userId) => {
+  const accessToken = jwt.sign(
+    { id: userId },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: "1d" }
   );
-  const refreshtoken=jwt.sign(
-    {userid}
-    ,process.env.REFRESH_TOKEN_SECRET,
-    {expiresIn:"15d"}
-  )
 
+  const refreshToken = jwt.sign(
+    { id: userId },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: "7d" }
+  );
 
-  return {accesstoken,refreshtoken}
+  return { accessToken, refreshToken };
 };
 
-export default generateAndSetCookie;
+export default generateTokens;

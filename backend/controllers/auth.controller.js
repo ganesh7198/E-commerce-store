@@ -1,104 +1,133 @@
-import express from 'express';
-import bcrypt from 'bcryptjs';
-import User from '../models/user.models.js'
-import generateAndSetCookie from '../utils/generateandsetcookie.js';
-import { redis } from '../utils/redis.js';
+import bcrypt from "bcryptjs";
+import User from "../models/user.models.js";
+import generateTokens from "../utils/generateandsetcookie.js";
+import { redis } from "../utils/redis.js";
+import dotenv from 'dotenv'
+dotenv.config()
 
-const storerefereshtoken = async(userid,refreshtoken)=>{
-   await redis.set(`refresh_token:${userid}`,refreshtoken, "EX",7*24*60*60)
-}
-const setcookie= async (res,accesstoken,refreshtoken)=>{
-   res.cookie("jwt-ecommerce-token", accesstoken, {
-    httpOnly: true,                           // cannot be accessed by JS
-    secure: process.env.NODE_ENV === "production", // only over HTTPS
-    sameSite: "strict",                        // CSRF protection
-    maxAge: 24 * 60 * 60 * 1000,              // 1 day in milliseconds
+/* -------------------- HELPERS -------------------- */
+
+const storeRefreshToken = async (userId, refreshToken) => {
+  await redis.set(
+    `refresh_token:${userId}`,
+    refreshToken,
+    "EX",
+    7 * 24 * 60 * 60 // 7 days
+  );
+};
+
+const setCookies = (res, accessToken, refreshToken) => {
+  res.cookie("access_token", accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
   });
-}
+
+  res.cookie("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+};
+
+/* -------------------- SIGNUP -------------------- */
+
 export const signupcontroller = async (req, res) => {
   try {
-    const { username , email, password, role } = req.body; 
+    const { username, email, password, role } = req.body;
 
-    // ---------------- VALIDATION ----------------
+    // Validation
     if (!username || !email || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Please provide all fields" });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all fields",
+      });
     }
 
     if (username.length < 6) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Username should be at least 6 characters" });
+      return res.status(400).json({
+        success: false,
+        message: "Username should be at least 6 characters",
+      });
     }
 
- if (password.length < 8 || password.length > 16) {
-  return res.status(400).json({
-    success: false,
-    message: "Password should be between 8 to 16 characters",
-  });
-}
+    if (password.length < 8 || password.length > 16) {
+      return res.status(400).json({
+        success: false,
+        message: "Password should be between 8 and 16 characters",
+      });
+    }
 
-
-    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Please provide a valid email" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email address",
+      });
     }
 
-    // Check if email already exists
-    const existuser = await User.findOne({ email });
-    if (existuser) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Email already exists" });
+    const emailExists = await User.findOne({ email });
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists",
+      });
     }
 
-    // Check if username already exists
-    const existusername = await User.findOne({ username });
-    if (existusername) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Username already exists" });
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists",
+      });
     }
 
-    // Role validation
     const allowedRoles = ["user", "provider"];
     const finalRole = allowedRoles.includes(role) ? role : "user";
 
-    // ---------------- HASH PASSWORD ----------------
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // ---------------- CREATE NEW USER ----------------
-    const newuser = await User.create({
+    // Create user
+    const newUser = await User.create({
       username,
       email,
       password: hashedPassword,
       role: finalRole,
     });
-    const {accesstoken,refreshtoken}=await generateAndSetCookie(newuser._id);
-    await storerefereshtoken(newuser._id,refreshtoken)
-    await setcookie(accesstoken,refreshtoken,res);
+
+    // Generate tokens
+    const { accessToken, refreshToken } = generateTokens(newUser._id);
+
+    // Store refresh token
+    await storeRefreshToken(newUser._id, refreshToken);
+
+    // Set cookies
+    setCookies(res, accessToken, refreshToken);
 
     res.status(201).json({
       success: true,
-      message: "User created successfully",
-      data: {
-        id: newuser._id,
-        username: newuser.username,
-        email: newuser.email,
-        role: newuser.role,
+      message: "User registered successfully",
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        role: newUser.role,
       },
     });
   } catch (error) {
-    console.log("Error in signupcontroller:", error.message);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("Signup error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
+/* -------------------- LOGIN -------------------- */
 
 export const logincontroller = async (req, res) => {
   try {
@@ -111,52 +140,43 @@ export const logincontroller = async (req, res) => {
       });
     }
 
-    // Validate email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid email",
-      });
-    }
-
-    // Find user
-    const existeduser = await User.findOne({ email });
-    if (!existeduser) {
+    const user = await User.findOne({ email });
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
-    // Compare password
-    const validpassword = await bcrypt.compare(
-      password,
-      existeduser.password
-    );
-
-    if (!validpassword) {
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
-    // Set JWT cookie
-    await generateAndSetCookie(existeduser._id, res);
+    // Generate tokens
+    const { accessToken, refreshToken } = generateTokens(user._id);
+
+    // Store refresh token
+    await storeRefreshToken(user._id, refreshToken);
+
+    // Set cookies
+    setCookies(res, accessToken, refreshToken);
 
     res.status(200).json({
       success: true,
       message: "Login successful",
       user: {
-        id: existeduser._id,
-        username: existeduser.username,
-        email: existeduser.email,
-        role: existeduser.role,
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
-    console.log("Error in login controller:", error.message);
+    console.error("Login error:", error.message);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -164,22 +184,26 @@ export const logincontroller = async (req, res) => {
   }
 };
 
+/* -------------------- LOGOUT -------------------- */
 
 export const logoutcontroller = async (req, res) => {
   try {
-    res.clearCookie("jwt-ecommerce-token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
+    const userId = req.user?.id; // from auth middleware
 
-    return res.status(200).json({
+    if (userId) {
+      await redis.del(`refresh_token:${userId}`);
+    }
+
+    res.clearCookie("access_token");
+    res.clearCookie("refresh_token");
+
+    res.status(200).json({
       success: true,
       message: "Logout successful",
     });
   } catch (error) {
-    console.log("Error in logout controller:", error.message);
-    return res.status(500).json({
+    console.error("Logout error:", error.message);
+    res.status(500).json({
       success: false,
       message: "Internal server error",
     });
