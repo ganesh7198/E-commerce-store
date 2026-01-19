@@ -7,6 +7,11 @@ const productSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    providername:{
+     type:mongoose.Schema.Types.ObjectId,
+       ref:"User",
+       required:true
+    },
     description: {
       type: String,
       required: true,
