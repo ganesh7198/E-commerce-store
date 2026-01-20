@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Product from "../models/product.models.js";
 import cloudinary from "../utils/cloudinary.js";
 import { redis } from "../utils/redis.js";
@@ -75,7 +76,7 @@ export const getfeaturedproduct=async(req,res)=>{
 }
 
 // create product controller
-export const createProduct = async (req, res) => {
+export const createproduct = async (req, res) => {
   try {
     //  role check
     if (!["admin", "provider"].includes(req.user.role)) {
@@ -136,3 +137,96 @@ export const createProduct = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+// delete created product
+export const deleteproduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedProduct = await Product.findByIdAndDelete(id);
+
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "No product found" });
+    }
+
+    if (deletedProduct.image) {
+      const publicId = deletedProduct.image
+        .split("/")
+        .pop()
+        .split(".")[0];
+
+      try {
+        await cloudinary.uploader.destroy(`products/${publicId}`);
+        console.log("Image deleted from Cloudinary");
+      } catch (error) {
+        console.error("Error deleting image from Cloudinary", error);
+        return res.status(500).json({
+          message: "Product deleted, but image deletion failed",
+        });
+      }
+    }
+
+    res.status(200).json({ message: "Product deleted successfully" });
+
+  } catch (error) {
+    console.error("Error in delete product controller", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// recommmandation product 
+export const recommmandationproduct=async (req,res)=>{
+	try{
+       const product= await Product.aggregate([
+		{
+		$sample:{size:10}
+	   },
+	    {
+          $project:{
+			_id:1,
+			name:1,
+			description:1,
+			image:1,
+			price:1
+		  }
+		}])
+		res.status(200).json(product)
+	}catch(error){
+		console.log('error in the recommmandatonproduct controller');
+       res.status(500).json({message:"intrnal server error "})
+	}
+}
+
+export const toggleFeaturedProduct = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    product.isFeatured = !product.isFeatured;
+    const updatedProduct = await product.save();
+
+    await updateFeaturedProductCache();
+
+    res.status(200).json({
+      message: "Featured product updated successfully",
+      data: updatedProduct,
+    });
+
+  } catch (error) {
+    console.error("Error in toggleFeaturedProduct controller", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+async function updateFeaturedProductCache(){
+	try{
+		 const featuredproduct=await Product.find({isFeatured:true}).lean();
+		 await redis.set("featured_products",JSON.stringify( featuredproduct),"EX",3600)
+	}catch(error){
+         console.log('error in the updatedfeaturedproductcache funcation in star featured product ')
+		
+	}
+}
