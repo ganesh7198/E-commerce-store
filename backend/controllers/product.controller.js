@@ -77,7 +77,7 @@ export const getfeaturedproduct=async(req,res)=>{
 // create product controller
 export const createProduct = async (req, res) => {
   try {
-    // 🔐 role check
+    //  role check
     if (!["admin", "provider"].includes(req.user.role)) {
       return res.status(403).json({ message: "Not authorized to create product" });
     }
